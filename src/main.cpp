@@ -70,6 +70,7 @@ int main() {
 
   // MPC is initialized here!
   MPC mpc;
+  int iters = 50;
 
   h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
@@ -85,8 +86,9 @@ int main() {
         string event = j[0].get<string>();
         if (event == "telemetry") {
           // j[1] is the data JSON object
-          vector<double> ptsx = j[1]["ptsx"];
-          vector<double> ptsy = j[1]["ptsy"];
+            Eigen::VectorXd ptsx = j[1]["ptsx"];
+            Eigen::VectorXd ptsy = j[1]["ptsy"];
+
           double px = j[1]["x"];
           double py = j[1]["y"];
           double psi = j[1]["psi"];
@@ -98,6 +100,58 @@ int main() {
           * Both are in between [-1, 1].
           *
           */
+
+            // The polynomial is fitted to a straight line so a polynomial with
+            // order 2 should be sufficient.
+            auto coeffs = polyfit(ptsx, ptsy, 2);
+
+            // The cross track error is calculated by evaluating at polynomial at x, f(x)
+            // and subtracting y.
+            double cte = polyeval(coeffs, px) - py;
+            // Due to the sign starting at 0, the orientation error is -f'(x).
+            // derivative of coeffs[0] + coeffs[1] * x -> coeffs[1]
+            double epsi = psi - atan(coeffs[1]);
+
+            Eigen::VectorXd state(6);
+            state << px, py, psi, v, cte, epsi;
+
+            std::vector<double> x_vals = {state[0]};
+            std::vector<double> y_vals = {state[1]};
+            std::vector<double> psi_vals = {state[2]};
+            std::vector<double> v_vals = {state[3]};
+            std::vector<double> cte_vals = {state[4]};
+            std::vector<double> epsi_vals = {state[5]};
+            std::vector<double> delta_vals = {};
+            std::vector<double> a_vals = {};
+
+            for (size_t i = 0; i < iters; i++)
+            {
+                std::cout << "Iteration " << i << std::endl;
+
+                auto vars = mpc.Solve(state, coeffs);
+
+                x_vals.push_back(vars[0]);
+                y_vals.push_back(vars[1]);
+                psi_vals.push_back(vars[2]);
+                v_vals.push_back(vars[3]);
+                cte_vals.push_back(vars[4]);
+                epsi_vals.push_back(vars[5]);
+
+                delta_vals.push_back(vars[6]);
+                a_vals.push_back(vars[7]);
+
+                state << vars[0], vars[1], vars[2], vars[3], vars[4], vars[5];
+                std::cout << "x = " << vars[0] << std::endl;
+                std::cout << "y = " << vars[1] << std::endl;
+                std::cout << "psi = " << vars[2] << std::endl;
+                std::cout << "v = " << vars[3] << std::endl;
+                std::cout << "cte = " << vars[4] << std::endl;
+                std::cout << "epsi = " << vars[5] << std::endl;
+                std::cout << "delta = " << vars[6] << std::endl;
+                std::cout << "a = " << vars[7] << std::endl;
+                std::cout << std::endl;
+            }
+
           double steer_value;
           double throttle_value;
 
