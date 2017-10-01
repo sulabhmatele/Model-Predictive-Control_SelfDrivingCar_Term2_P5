@@ -70,21 +70,25 @@ int main() {
 
   // MPC is initialized here!
   MPC mpc;
-  int iters = 50;
 
   h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
                      uWS::OpCode opCode) {
+      int iters = 50;
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
     string sdata = string(data).substr(0, length);
     cout << sdata << endl;
-    if (sdata.size() > 2 && sdata[0] == '4' && sdata[1] == '2') {
+
+    if (sdata.size() > 2 && sdata[0] == '4' && sdata[1] == '2')
+    {
       string s = hasData(sdata);
-      if (s != "") {
+      if (!s.empty())
+      {
         auto j = json::parse(s);
         string event = j[0].get<string>();
-        if (event == "telemetry") {
+        if (event == "telemetry")
+        {
           // j[1] is the data JSON object
             Eigen::VectorXd ptsx = j[1]["ptsx"];
             Eigen::VectorXd ptsy = j[1]["ptsy"];
@@ -102,8 +106,8 @@ int main() {
           */
 
             // The polynomial is fitted to a straight line so a polynomial with
-            // order 2 should be sufficient.
-            auto coeffs = polyfit(ptsx, ptsy, 2);
+            // order 3 should be sufficient.
+            auto coeffs = polyfit(ptsx, ptsy, 3);
 
             // The cross track error is calculated by evaluating at polynomial at x, f(x)
             // and subtracting y.
@@ -153,7 +157,7 @@ int main() {
             }
 
           double steer_value = delta_vals[iters];
-          double throttle_value[iters];
+          double throttle_value = a_vals[iters];
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
