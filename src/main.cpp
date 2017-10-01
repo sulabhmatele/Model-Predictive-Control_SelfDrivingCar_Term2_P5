@@ -152,12 +152,17 @@ int main() {
                 std::cout << std::endl;
             }
 
-          double steer_value;
-          double throttle_value;
+          double steer_value = delta_vals[iters];
+          double throttle_value[iters];
 
           json msgJson;
           // NOTE: Remember to divide by deg2rad(25) before you send the steering value back.
           // Otherwise the values will be in between [-deg2rad(25), deg2rad(25] instead of [-1, 1].
+
+            steer_value = steer_value/deg2rad(25);
+
+            steer_value *= -1; // Simulator limitation, as suggested in project description
+
           msgJson["steering_angle"] = steer_value;
           msgJson["throttle"] = throttle_value;
 
