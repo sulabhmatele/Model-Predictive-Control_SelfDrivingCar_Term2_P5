@@ -20,7 +20,8 @@ double rad2deg(double x) { return x * 180 / pi(); }
 // Checks if the SocketIO event has JSON data.
 // If there is data the JSON object in string format will be returned,
 // else the empty string "" will be returned.
-string hasData(string s) {
+string hasData(string s)
+{
     auto found_null = s.find("null");
     auto b1 = s.find_first_of("[");
     auto b2 = s.rfind("}]");
@@ -33,9 +34,12 @@ string hasData(string s) {
 }
 
 // Evaluate a polynomial.
-double polyeval(Eigen::VectorXd coeffs, double x) {
+double polyeval(Eigen::VectorXd coeffs, double x)
+{
     double result = 0.0;
-    for (int i = 0; i < coeffs.size(); i++) {
+
+    for (int i = 0; i < coeffs.size(); i++)
+    {
         result += coeffs[i] * pow(x, i);
     }
     return result;
@@ -45,17 +49,21 @@ double polyeval(Eigen::VectorXd coeffs, double x) {
 // Adapted from
 // https://github.com/JuliaMath/Polynomials.jl/blob/master/src/Polynomials.jl#L676-L716
 Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
-                        int order) {
+                        int order)
+{
     assert(xvals.size() == yvals.size());
     assert(order >= 1 && order <= xvals.size() - 1);
     Eigen::MatrixXd A(xvals.size(), order + 1);
 
-    for (int i = 0; i < xvals.size(); i++) {
+    for (int i = 0; i < xvals.size(); i++)
+    {
         A(i, 0) = 1.0;
     }
 
-    for (int j = 0; j < xvals.size(); j++) {
-        for (int i = 0; i < order; i++) {
+    for (int j = 0; j < xvals.size(); j++)
+    {
+        for (int i = 0; i < order; i++)
+        {
             A(j, i + 1) = A(j, i) * xvals(j);
         }
     }
@@ -65,26 +73,31 @@ Eigen::VectorXd polyfit(Eigen::VectorXd xvals, Eigen::VectorXd yvals,
     return result;
 }
 
-int main() {
+int main()
+{
     uWS::Hub h;
 
-    // MPC is initialized here!
+    // MPC object creation
     MPC mpc;
 
     h.onMessage([&mpc](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length,
-                       uWS::OpCode opCode) {
+                       uWS::OpCode opCode)
+                {
         // "42" at the start of the message means there's a websocket message event.
         // The 4 signifies a websocket message
         // The 2 signifies a websocket event
+
         string sdata = string(data).substr(0, length);
         cout << sdata << endl;
 
         if (sdata.size() > 2 && sdata[0] == '4' && sdata[1] == '2')
         {
             string s = hasData(sdata);
-            if (s != "") {
+            if (s != "")
+            {
                 auto j = json::parse(s);
                 string event = j[0].get<string>();
+
                 if (event == "telemetry")
                 {
                     // j[1] is the data JSON object
@@ -101,19 +114,21 @@ int main() {
 
                     // Predict the state after the latency:
                     // predict state in 100ms
-                    double latency = 0.1;
+                    double lat_dt = 0.1;
 
-                    px = px + v*cos(psi)*latency;
-                    py = py + v*sin(psi)*latency;
-                    psi = psi - v * (delta/2.67) * latency;
-                    v = v + acceleration*latency;
+
+                    px = px + v * cos(psi) * lat_dt;
+                    py = py + v * sin(psi)*lat_dt;
+                    psi = psi - v * (delta/mpc.Lf) * lat_dt;
+                    v = v + acceleration * lat_dt;
 
                     /*
-                    * TODO: Calculate steering angle and throttle using MPC.
+                    * Calculating steering angle and throttle using MPC.
                     *
-                    * Both are in between [-1, 1].
+                    * steering angle - [-25, 25].
                     *
                     */
+
                     for (int i = 0; i < ptsx.size(); i++)
                     {
                         double shift_x = ptsx[i]-px;
@@ -129,71 +144,29 @@ int main() {
                     double* ptry = &ptsy[0];
                     Eigen::Map<Eigen::VectorXd> ptsy_transform(ptry, 6);
 
-                    // The polynomial is fitted to a straight line so a polynomial with
-                    // order 3 should be sufficient.
+                    // The polynomial is fitted to 3rd order polynomial
                     auto coeffs = polyfit(ptsx_transform, ptsy_transform, 3);
 
-                    // The cross track error is calculated by evaluating at polynomial at x, f(x)
-                    // and subtracting y.
+                    // The cross track error is calculated by evaluating at polynomial
                     double cte = polyeval(coeffs, 0);
+
                     // Due to the sign starting at 0, the orientation error is -f'(x).
                     // derivative of coeffs[0] + coeffs[1] * x -> coeffs[1]
                     double epsi = -atan(coeffs[1]);
 
                     Eigen::VectorXd state(6);
                     state << 0, 0, 0, v, cte, epsi;
-//            state << px, py, psi, v, cte, epsi;
 
-                    /*    std::vector<double> x_vals = {state[0]};
-                        std::vector<double> y_vals = {state[1]};
-                        std::vector<double> psi_vals = {state[2]};
-                        std::vector<double> v_vals = {state[3]};
-                        std::vector<double> cte_vals = {state[4]};
-                        std::vector<double> epsi_vals = {state[5]};
-                        std::vector<double> delta_vals = {};
-                        std::vector<double> a_vals = {};*/
-
+                    // MPC solve
                     auto vars = mpc.Solve(state, coeffs);
 
-                    /*    x_vals.push_back(vars[0]);
-                        y_vals.push_back(vars[1]);
-                        psi_vals.push_back(vars[2]);
-                        v_vals.push_back(vars[3]);
-                        cte_vals.push_back(vars[4]);
-                        epsi_vals.push_back(vars[5]);
-                        delta_vals.push_back(vars[6]);
-                        a_vals.push_back(vars[7]);*/
-
-                    //state << vars[0], vars[1], vars[2], vars[3], vars[4], vars[5];
-/*            std::cout << "x = " << vars[0] << std::endl;
-            std::cout << "y = " << vars[1] << std::endl;
-            std::cout << "psi = " << vars[2] << std::endl;
-            std::cout << "v = " << vars[3] << std::endl;
-            std::cout << "cte = " << vars[4] << std::endl;
-            std::cout << "epsi = " << vars[5] << std::endl;
-            std::cout << "delta = " << vars[6] << std::endl;
-            std::cout << "a = " << vars[7] << std::endl;
-            std::cout << std::endl;*/
-
-                    //Display the waypoints/reference line
-                    vector<double> next_x_vals;
-                    vector<double> next_y_vals;
-
-                    double poly_inc = 2.5;
-                    int num_points = 25;
-
-                    for(int i = 1; i < num_points; i++)
-                    {
-                        next_x_vals.push_back(poly_inc*i);
-                        next_y_vals.push_back(polyeval(coeffs, poly_inc*i));
-                    }
-
-                    //Display the MPC predicted trajectory
+                    //Display the MPC predicted trajectory - Green line on simulator
                     vector<double> mpc_x_vals;
                     vector<double> mpc_y_vals;
 
                     for(int i = 2; i < vars.size(); i++)
                     {
+                        // Retrieval as it was passed from solve method
                         if(i%2 == 0)
                         {
                             mpc_x_vals.push_back(vars[i]);
@@ -204,9 +177,25 @@ int main() {
                         }
                     }
 
+                    //Display the waypoints/reference line - Yellow line on simulator
+                    vector<double> next_x_vals;
+                    vector<double> next_y_vals;
+
+                    int num_points = 25; // 25 points in future
+                    double poly_inc = 2.5; // 2.5 m difference between each point
+
+                    for(int i = 1; i < num_points; i++)
+                    {
+                        // Project in future, based on the reference points received and
+                        // coeff calculated from the same
+                        next_x_vals.push_back(poly_inc * i);
+                        next_y_vals.push_back(polyeval(coeffs, poly_inc * i));
+                    }
+
                     json msgJson;
 
-                    msgJson["steering_angle"] = vars[0]/(deg2rad(25) * 2.67);
+                    // Converting delta angle to be between -1 to +1
+                    msgJson["steering_angle"] = vars[0]/(deg2rad(25) * mpc.Lf);
                     msgJson["throttle"] = vars[1];
 
                     //.. add (x,y) points to list here, points are in reference to the vehicle's coordinate system
@@ -222,16 +211,13 @@ int main() {
                     msgJson["mpc_y"] = mpc_y_vals;
 
                     auto msg = "42[\"steer\"," + msgJson.dump() + "]";
-                    //  std::cout << msg << std::endl;
+
                     // Latency
                     // The purpose is to mimic real driving conditions where
                     // the car does actuate the commands instantly.
                     //
-                    // Feel free to play around with this value but should be to drive
-                    // around the track with 100ms latency.
-                    //
-                    // NOTE: REMEMBER TO SET THIS TO 100 MILLISECONDS BEFORE
-                    // SUBMITTING.
+                    // NOTE: 100ms as per the requirement from project
+
                     this_thread::sleep_for(chrono::milliseconds(100));
                     ws.send(msg.data(), msg.length(), uWS::OpCode::TEXT);
                 }
