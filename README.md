@@ -66,14 +66,14 @@ Polyfit is adopted from [link](https://github.com/JuliaMath/Polynomials.jl/blob/
 
 * `MPC solve` uses 2 main libs to efficiently optimize the `steering angnle` (δ) and `throttle` (a):
 
-   ##### IPOPT
+   #### IPOPT
    Ipopt is the tool we use to optimize the control inputs [δ
    ​1
    ​​ ,a1,...,δN−1,a
    ​N−1
    ​​ ]. It's able to find locally optimal values (non-linear problem!) while keeping the constraints set directly to the actuators and the constraints defined by the vehicle model. Ipopt requires us the jacobians and hessians directly - it does not compute them for us. Hence, we need to either manually compute them or have a library do this for us. Luckily, there is a library called `CppAD` which does exactly this.
 
-   ##### CppAD
+   #### CppAD
    CppAD is a library we use for automatic differentiation. By using CppAD we don't have to manually compute derivatives, which is tedious and prone to error.
    
    In order to use CppAD effectively, we have to use its types instead of regular double or std::vector types.
@@ -144,7 +144,7 @@ Polyfit is adopted from [link](https://github.com/JuliaMath/Polynomials.jl/blob/
   + Processing the `result` and return to `main`. 
   
   
-##### Timestep Length and Elapsed Duration (N & dt)
+#### Timestep Length and Elapsed Duration (N & dt)
 
 The values for `N` and `dt` used here are:
 
@@ -157,10 +157,10 @@ Different other values which were tried were - `N` as - 20 and keeping `dt` as -
 With other different combinations it was found that, the calculated way points were either oscillating or calculating the predicted path which was not following the desired path.
 
 
-##### Polynomial Fitting and MPC Preprocessing
+#### Polynomial Fitting and MPC Preprocessing
 These points are discussed above.
 
-##### Model Predictive Control with Latency
+#### Model Predictive Control with Latency
 The `latency` is the time difference between the vehicle issues the command to different actuator, to the 
 time when actuator really processes the command.
 
