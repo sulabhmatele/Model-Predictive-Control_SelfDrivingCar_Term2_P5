@@ -112,13 +112,15 @@ int main()
                     double delta = j[1]["steering_angle"];
                     double acceleration = j[1]["throttle"];
 
-                    // Predict the state after the latency:
+                    // Predict the state after the latency: By kinematic equations
                     // predict state in 100ms
                     double lat_dt = 0.1;
 
-
                     px = px + v * cos(psi) * lat_dt;
                     py = py + v * sin(psi)*lat_dt;
+
+                    // The equation is updated to match the simulator
+                    // expectation of reverse left and right
                     psi = psi - v * (delta/mpc.Lf) * lat_dt;
                     v = v + acceleration * lat_dt;
 
@@ -131,6 +133,8 @@ int main()
 
                     for (int i = 0; i < ptsx.size(); i++)
                     {
+                        // Considering the diff between ref and actual position should be 0
+                        // ref: MPC controller QnA
                         double shift_x = ptsx[i]-px;
                         double shift_y = ptsy[i]-py;
 
@@ -181,15 +185,24 @@ int main()
                     vector<double> next_x_vals;
                     vector<double> next_y_vals;
 
-                    int num_points = 25; // 25 points in future
+                    int num_points = 25 + 2; // 25 points in future + 2 to neglect latency
                     double poly_inc = 2.5; // 2.5 m difference between each point
 
                     for(int i = 1; i < num_points; i++)
                     {
                         // Project in future, based on the reference points received and
                         // coeff calculated from the same
-                        next_x_vals.push_back(poly_inc * i);
-                        next_y_vals.push_back(polyeval(coeffs, poly_inc * i));
+
+                        // This 'if' takes care of not showing the points,
+                        // which are not relevant due to latency
+                        // At speed of 100mph, car travels 44.704 m/sec, So at 100ms - 4.4m,
+                        // which is roughly equal to 2 calculated steps, so neglecting first 2 calculations
+
+                        if(i > 2)
+                        {
+                            next_x_vals.push_back(poly_inc * i);
+                            next_y_vals.push_back(polyeval(coeffs, poly_inc * i));
+                        }
                     }
 
                     json msgJson;
