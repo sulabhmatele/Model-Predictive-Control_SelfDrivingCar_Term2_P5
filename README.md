@@ -62,3 +62,122 @@ Polyfit is adopted from [link](https://github.com/JuliaMath/Polynomials.jl/blob/
   
 * We pass the state model of 6 parameters and `coeff` to `MPC` solve, which then calculates and models the constraints, and returns the desired optimized `steering angle` and `throttle` values.
 
+### MPC solve and different helper methods:
+
+* `MPC solve` uses 2 main libs to efficiently optimize the `steering angnle` (δ) and `throttle` (a):
+
+   ##### IPOPT
+   Ipopt is the tool we use to optimize the control inputs [δ
+   ​1
+   ​​ ,a1,...,δN−1,a
+   ​N−1
+   ​​ ]. It's able to find locally optimal values (non-linear problem!) while keeping the constraints set directly to the actuators and the constraints defined by the vehicle model. Ipopt requires us the jacobians and hessians directly - it does not compute them for us. Hence, we need to either manually compute them or have a library do this for us. Luckily, there is a library called `CppAD` which does exactly this.
+
+   ##### CppAD
+   CppAD is a library we use for automatic differentiation. By using CppAD we don't have to manually compute derivatives, which is tedious and prone to error.
+   
+   In order to use CppAD effectively, we have to use its types instead of regular double or std::vector types.
+   
+   Additionally math functions must be called from CppAD. Here's an example of calling pow:
+   
+   `CppAD::pow(x, 2);
+   // instead of 
+   pow(x, 2);`
+   
+   Luckily most elementary math operations are overloaded. So calling `*, +, -, /` will work as intended as long as it's called on `CppAD<double>` instead of `double`.
+   
+* The implementation for solver goes as following steps:
+
+  + Defining the vector of sufficient length to accomodate, different state parameters for the number of predicting states (N).
+  
+    Here with 6 state params + 2 desired params its -> `n_vars = N * 6 + (N - 1) * 2` 
+  
+  + Defining the constraint vector to define contraints for the parameters to not exceed a certain value.
+  
+  + Defining the constraints upper and lower limits for state and output vectors.
+  
+    Upper and lower limits for different params discussed in `Rubric Points` section above.
+  
+  + Defining the `operator()` method which would be called by solver implicitly, to accommodate the different `cost` and `constraints` equations.
+  
+    Cost is the sum of cost to control `cte, epsi, velocity` plus controlling `sterring angle, throttle` plus controlling and avoiding sharp changes in `sterring angle, throttle` 
+    and its calculated as:
+    
+    
+            // The part of the cost based on the reference state.
+            for (int t = 0; t < N; t++)
+            {
+                fg[0] += 2000 * CppAD::pow(vars[cte_start + t], 2);
+                fg[0] += 2000 * CppAD::pow(vars[epsi_start + t], 2);
+                fg[0] += CppAD::pow(vars[v_start + t] - ref_v, 2);
+            }
+    
+            // Minimize the use of actuators.
+            for (int t = 0; t < N - 1; t++)
+            {
+                fg[0] += CppAD::pow(vars[delta_start + t], 2);
+                fg[0] += CppAD::pow(vars[a_start + t], 2);
+            }
+    
+            // Minimize the value gap between sequential actuation, for smooth transition
+            for (int t = 0; t < N - 2; t++)
+            {
+                fg[0] += 200 * CppAD::pow(vars[delta_start + t + 1] - vars[delta_start + t], 2);
+                fg[0] += 10 * CppAD::pow(vars[a_start + t + 1] - vars[a_start + t], 2);
+            }
+            
+  Here the multipliers used as `2000, 200, 10` are chosen based on the observed performance of the model.
+  These parameters influence the way model calculates the cost and puts more weight to correcting or controlling the
+  respective parameter. 
+  
+  + Model different parameters, using different kinematic equations:
+  
+             // The equations for the model:
+             // x_[t+1] = x[t] + v[t] * cos(psi[t]) * dt
+             // y_[t+1] = y[t] + v[t] * sin(psi[t]) * dt
+             // psi_[t+1] = psi[t] + v[t] / Lf * delta[t] * dt
+             // v_[t+1] = v[t] + a[t] * dt
+             // cte[t+1] = f(x[t]) - y[t] + v[t] * sin(epsi[t]) * dt
+             // epsi[t+1] = psi[t] - psides[t] + v[t] * delta[t] / Lf * dt
+
+  
+  + Processing the `result` and return to `main`. 
+  
+  
+##### Timestep Length and Elapsed Duration (N & dt)
+
+The values for `N` and `dt` used here are:
+
+    N = 10
+    dt = 0.1 // 100ms
+    
+Choosing the above values made a proper balance of selecting `N` enough big to have sufficient data for predicted points, and also not making unnecessary calculations at each timestamps.
+Different other values which were tried were - `N` as - 20 and keeping `dt` as - 0.05, 0.2.
+
+With other different combinations it was found that, the calculated way points were either oscillating or calculating the predicted path which was not following the desired path.
+
+
+##### Polynomial Fitting and MPC Preprocessing
+These points are discussed above.
+
+##### Model Predictive Control with Latency
+The `latency` is the time difference between the vehicle issues the command to different actuator, to the 
+time when actuator really processes the command.
+
+In the simulated environment, its modelled by providing delay of 100ms. Then modeling the latency in the model to consider and predict the optimum value for `steering angel` and 
+`throttle`.
+
+Latency is processed as:
+
+    // Predict the state after the latency: By kinematic equations
+    // predict state in 100ms
+    double lat_dt = 0.1;
+
+    px = px + v * cos(psi) * lat_dt;
+    py = py + v * sin(psi) * lat_dt;
+
+    // The equation is updated to match the simulator
+    // expectation of reverse left and right
+    psi = psi - v * (delta/mpc.Lf) * lat_dt;
+    v = v + acceleration * lat_dt; 
+    

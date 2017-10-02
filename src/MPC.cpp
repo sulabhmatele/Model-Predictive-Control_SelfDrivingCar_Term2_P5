@@ -175,7 +175,7 @@ vector<double> MPC::Solve(Eigen::VectorXd state, Eigen::VectorXd coeffs)
     // 4 * 10 + 2 * 9
 
     // Here state varibales are 6
-    size_t n_vars = N * 6 + (N - 1) * 2;;
+    size_t n_vars = N * 6 + (N - 1) * 2;
     // Number of constraints for state variables
     size_t n_constraints = N * 6;
 
