@@ -117,7 +117,7 @@ int main()
                     double lat_dt = 0.1;
 
                     px = px + v * cos(psi) * lat_dt;
-                    py = py + v * sin(psi)*lat_dt;
+                    py = py + v * sin(psi) * lat_dt;
 
                     // The equation is updated to match the simulator
                     // expectation of reverse left and right
